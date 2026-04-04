@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: exampulse-backend
+    env_file:
+      - ./backend/.env.example
+    environment:
+      - DATABASE_URL=sqlite:///./data/exampulse.db
+    volumes:
+      - backend_data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    container_name: exampulse-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  backend_data:
