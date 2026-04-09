@@ -302,23 +302,29 @@ git clone https://github.com/Ikkdar/se-toolkit-hackathon.git
 cd se-toolkit-hackathon
 ```
 
+1. Prepare Docker env file:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
 1. Start all services:
 
 ```bash
-docker compose up -d --build
+docker compose --env-file .env.docker up -d --build
 ```
 
 1. (Optional) Authenticate Qwen OAuth on VM host (for qwen-code-api):
 
 ```bash
 qwen auth qwen-oauth
-docker compose restart qwen-proxy backend
+docker compose --env-file .env.docker restart qwen-proxy backend
 ```
 
 1. Verify services:
 
 ```bash
-docker compose ps
+docker compose --env-file .env.docker ps
 ```
 
 1. Open the app:
@@ -329,7 +335,7 @@ docker compose ps
 1. Stop services when needed:
 
 ```bash
-docker compose down
+docker compose --env-file .env.docker down
 ```
 
 ## Section 7: Testing checklist

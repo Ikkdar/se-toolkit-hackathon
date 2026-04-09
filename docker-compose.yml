@@ -3,6 +3,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        REGISTRY_PREFIX_DOCKER_HUB: ${REGISTRY_PREFIX_DOCKER_HUB:-}
     container_name: exampulse-backend
     env_file:
       - ./backend/.env.example
@@ -18,7 +20,7 @@ services:
     volumes:
       - backend_data:/app/data
     ports:
-      - "8000:8000"
+      - ${BACKEND_HOST_ADDRESS:-0.0.0.0}:${BACKEND_HOST_PORT:-8000}:8000
     depends_on:
       - qwen-proxy
       - ollama
@@ -28,18 +30,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://localhost:8000
+        REGISTRY_PREFIX_DOCKER_HUB: ${REGISTRY_PREFIX_DOCKER_HUB:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+        VITE_API_BASE_URL: ${FRONTEND_PUBLIC_API_BASE_URL:-http://localhost:8000}
     container_name: exampulse-frontend
     depends_on:
       - backend
     ports:
-      - "5173:80"
+      - ${FRONTEND_HOST_ADDRESS:-0.0.0.0}:${FRONTEND_HOST_PORT:-5173}:80
 
   ollama:
-    image: ollama/ollama:latest
+    image: ${REGISTRY_PREFIX_DOCKER_HUB:-}ollama/ollama:latest
     container_name: exampulse-ollama
     ports:
-      - "11434:11434"
+      - ${OLLAMA_HOST_ADDRESS:-0.0.0.0}:${OLLAMA_HOST_PORT:-11434}:11434
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
@@ -48,6 +52,8 @@ services:
     build:
       context: ./qwen-proxy
       dockerfile: Dockerfile
+      args:
+        REGISTRY_PREFIX_DOCKER_HUB: ${REGISTRY_PREFIX_DOCKER_HUB:-}
     container_name: exampulse-qwen-proxy
     environment:
       - ADDRESS=0.0.0.0
@@ -60,9 +66,9 @@ services:
       - DEFAULT_MODEL=coder-model
       - LOG_LEVEL=error
     volumes:
-      - ${HOME}/.qwen:/root/.qwen
+      - ${QWEN_CREDS_HOST_PATH:-${HOME}/.qwen}:/root/.qwen
     ports:
-      - "8080:8080"
+      - ${QWEN_PROXY_HOST_ADDRESS:-0.0.0.0}:${QWEN_PROXY_HOST_PORT:-8080}:8080
     restart: unless-stopped
 
 volumes:
