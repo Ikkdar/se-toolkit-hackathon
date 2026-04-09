@@ -129,8 +129,8 @@ class RevisionPlanRequest(BaseModel):
     subject_id: int
     request_text: str
     start_date: Optional[date] = None
-    days: int = 7
-    tasks_count: int = 5
+    days: Optional[int] = None
+    tasks_count: Optional[int] = None
 
 
 class GeneratedPlanTaskOut(BaseModel):

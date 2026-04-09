@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.dependencies import get_current_user
-from app.models import RevisionPlan, Subject, User
+from app.models import Exam, RevisionPlan, Subject, User
 from app.schemas import RevisionPlanRequest, RevisionPlanResponse, SavedPlanItemUpdate, SavedRevisionPlanOut
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -54,6 +54,98 @@ def _clean_task_title(item: str, subject_name: str) -> str:
     return title or "Revision task"
 
 
+def _extract_days_from_text(request_text: str, start_date: date) -> Optional[int]:
+    text = request_text or ""
+
+    relative_patterns = [
+        r"(?:in|after|within)\s+(\d{1,2})\s+days?",
+        r"(?:за|через|осталось|до\s+экзамена\s+осталось)\s*(\d{1,2})\s*дн(?:я|ей)?",
+        r"(\d{1,2})\s*дн(?:я|ей)?\s*(?:до\s+(?:экзамена|теста))",
+    ]
+    for pattern in relative_patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                continue
+
+    for pattern, parser in (
+        (r"(\d{4}-\d{2}-\d{2})", lambda v: datetime.strptime(v, "%Y-%m-%d").date()),
+        (r"(\d{2}\.\d{2}\.\d{4})", lambda v: datetime.strptime(v, "%d.%m.%Y").date()),
+    ):
+        match = re.search(pattern, text)
+        if not match:
+            continue
+        try:
+            target = parser(match.group(1))
+        except ValueError:
+            continue
+        delta = (target - start_date).days + 1
+        if delta > 0:
+            return delta
+
+    return None
+
+
+def _extract_tasks_count_from_text(request_text: str) -> Optional[int]:
+    text = request_text or ""
+    patterns = [
+        r"(\d{1,2})\s*(?:tasks?|items?)",
+        r"(\d{1,2})\s*(?:задач(?:а|и|)|задани(?:е|я|й))",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                continue
+    return None
+
+
+def _infer_days_and_tasks_count(
+    request_text: str,
+    start_date: date,
+    upcoming_exam_date: Optional[date],
+    requested_days: Optional[int],
+    requested_tasks_count: Optional[int],
+) -> tuple[int, int]:
+    prompt_days = _extract_days_from_text(request_text, start_date)
+
+    exam_days: Optional[int] = None
+    if upcoming_exam_date:
+        delta = (upcoming_exam_date - start_date).days + 1
+        if delta > 0:
+            exam_days = delta
+
+    days = requested_days or prompt_days or exam_days or 7
+    days = max(1, min(days, 30))
+
+    prompt_tasks_count = _extract_tasks_count_from_text(request_text)
+    if requested_tasks_count:
+        tasks_count = requested_tasks_count
+    elif prompt_tasks_count:
+        tasks_count = prompt_tasks_count
+    else:
+        intensity_keywords = [
+            "mock",
+            "variant",
+            "intensive",
+            "timed",
+            "пробник",
+            "вариант",
+            "интенсив",
+            "сложн",
+        ]
+        is_intensive = any(word in (request_text or "").lower() for word in intensity_keywords)
+        tasks_per_day = 2 if is_intensive or days <= 5 else 1
+        tasks_count = days * tasks_per_day
+
+    tasks_count = max(1, min(tasks_count, 15))
+    return days, tasks_count
+
+
 def _fallback_plan(request_text: str, tasks_count: int) -> list[str]:
     raw = [line.strip(" -•\t") for line in request_text.replace(";", "\n").split("\n")]
     items = [chunk for chunk in raw if len(chunk) > 2]
@@ -90,6 +182,13 @@ def _normalize_tasks(items: list[str], tasks_count: int) -> list[str]:
         if len(cleaned) >= tasks_count:
             break
     return cleaned[:tasks_count]
+
+
+def _compute_due_offset(index: int, total_tasks: int, days: int) -> int:
+    if total_tasks <= 1 or days <= 1:
+        return 0
+    # Spread tasks across the whole period instead of stacking at the end.
+    return min(days - 1, round(index * (days - 1) / (total_tasks - 1)))
 
 
 def _extract_tasks_from_response(raw_response: str, tasks_count: int) -> list[str]:
@@ -157,18 +256,46 @@ def _pick_qwen_proxy_model(available_models: list[str]) -> Optional[str]:
     return available_models[0]
 
 
-def _build_prompt(subject_name: str, request_text: str, tasks_count: int, days: int) -> str:
-    return (
-        "You are a study planner. Create a concise revision plan for a student. "
-        f"Subject: {subject_name}. "
-        f"Request: {request_text}. "
-        f"Return EXACT JSON only with this schema: {{\"tasks\": [\"task 1\", \"task 2\", ...]}}. "
-        f"Generate {tasks_count} tasks distributed across {days} days."
+def _build_prompt(
+    subject_name: str,
+    request_text: str,
+    tasks_count: int,
+    days: int,
+    start_date: date,
+    upcoming_exam_date: Optional[date],
+) -> str:
+    exam_hint = ""
+    if upcoming_exam_date is not None:
+        days_left = max(1, (upcoming_exam_date - start_date).days + 1)
+        exam_hint = (
+            f"Upcoming exam date: {upcoming_exam_date.isoformat()} "
+            f"({days_left} days left from {start_date.isoformat()}). "
+        )
+
+    return "".join(
+        [
+            "You are a study planner. Create a concise revision plan for a student. ",
+            f"Subject: {subject_name}. ",
+            f"Plan start date: {start_date.isoformat()}. ",
+            exam_hint,
+            f"Request: {request_text}. ",
+            "Infer urgency and workload from the request text and exam timeline. ",
+            "If the request mentions exam or test conditions (format, limits, topics), reflect them in tasks. ",
+            "Return EXACT JSON only with this schema: {\"tasks\": [\"task 1\", \"task 2\", ...]}. ",
+            f"Target around {tasks_count} tasks across about {days} days, but adapt if the request implies otherwise.",
+        ]
     )
 
 
-def _generate_with_qwen_proxy(subject_name: str, request_text: str, tasks_count: int, days: int) -> tuple[list[str], Optional[str]]:
-    prompt = _build_prompt(subject_name, request_text, tasks_count, days)
+def _generate_with_qwen_proxy(
+    subject_name: str,
+    request_text: str,
+    tasks_count: int,
+    days: int,
+    start_date: date,
+    upcoming_exam_date: Optional[date],
+) -> tuple[list[str], Optional[str]]:
+    prompt = _build_prompt(subject_name, request_text, tasks_count, days, start_date, upcoming_exam_date)
     base = settings.qwen_proxy_base_url.rstrip("/")
     timeout_seconds = max(5, min(settings.llm_timeout_seconds, 60))
     timeout = httpx.Timeout(connect=2.0, read=timeout_seconds, write=5.0, pool=5.0)
@@ -223,8 +350,15 @@ def _generate_with_qwen_proxy(subject_name: str, request_text: str, tasks_count:
             return [], None
 
 
-def _generate_with_qwen(subject_name: str, request_text: str, tasks_count: int, days: int) -> tuple[list[str], Optional[str]]:
-    prompt = _build_prompt(subject_name, request_text, tasks_count, days)
+def _generate_with_qwen(
+    subject_name: str,
+    request_text: str,
+    tasks_count: int,
+    days: int,
+    start_date: date,
+    upcoming_exam_date: Optional[date],
+) -> tuple[list[str], Optional[str]]:
+    prompt = _build_prompt(subject_name, request_text, tasks_count, days, start_date, upcoming_exam_date)
 
     base = settings.ollama_base_url.rstrip("/")
     bounded_timeout = max(3, min(settings.ollama_timeout_seconds, 15))
@@ -275,35 +409,64 @@ def generate_revision_plan(
     if subject is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subject_id")
 
-    days = max(1, min(payload.days, 30))
-    tasks_count = max(1, min(payload.tasks_count, 15))
     start_date = payload.start_date or date.today()
+    upcoming_exam = (
+        db.query(Exam)
+        .filter(
+            Exam.user_id == current_user.id,
+            Exam.subject_id == subject.id,
+            Exam.exam_date >= start_date,
+        )
+        .order_by(Exam.exam_date.asc())
+        .first()
+    )
+    upcoming_exam_date = upcoming_exam.exam_date if upcoming_exam is not None else None
 
-    used_fallback = False
+    days, tasks_count = _infer_days_and_tasks_count(
+        request_text=payload.request_text,
+        start_date=start_date,
+        upcoming_exam_date=upcoming_exam_date,
+        requested_days=payload.days,
+        requested_tasks_count=payload.tasks_count,
+    )
+
     plan_items: list[str] = []
     model_used: Optional[str] = None
     provider_used: Optional[str] = None
 
     provider = settings.llm_provider.strip().lower()
     if provider in ("auto", "qwen_proxy"):
-        plan_items, model_used = _generate_with_qwen_proxy(subject.name, payload.request_text, tasks_count, days)
+        plan_items, model_used = _generate_with_qwen_proxy(
+            subject.name,
+            payload.request_text,
+            tasks_count,
+            days,
+            start_date,
+            upcoming_exam_date,
+        )
         if plan_items:
             provider_used = "qwen-code-api"
 
     if not plan_items and provider in ("auto", "ollama"):
-        plan_items, model_used = _generate_with_qwen(subject.name, payload.request_text, tasks_count, days)
+        plan_items, model_used = _generate_with_qwen(
+            subject.name,
+            payload.request_text,
+            tasks_count,
+            days,
+            start_date,
+            upcoming_exam_date,
+        )
         if plan_items:
             provider_used = "ollama"
 
     if not plan_items:
         plan_items = _fallback_plan(payload.request_text, tasks_count)
-        used_fallback = True
         provider_used = "fallback"
         model_used = "fallback"
 
     generated_tasks = []
     for index, item in enumerate(plan_items):
-        due_offset = min(index, days - 1)
+        due_offset = _compute_due_offset(index, len(plan_items), days)
         clean_title = _clean_task_title(item, subject.name)
         generated_tasks.append(
             {
