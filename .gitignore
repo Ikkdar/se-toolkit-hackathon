@@ -10,6 +10,7 @@ venv/
 # Database / local runtime
 *.db
 backend/data/
+.env.docker
 
 # Node / frontend build artifacts
 frontend/node_modules/
@@ -19,3 +20,6 @@ frontend/dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Local AI auth credentials
+.qwen/
