@@ -8,10 +8,20 @@ services:
       - ./backend/.env.example
     environment:
       - DATABASE_URL=sqlite:///./data/exampulse.db
+      - LLM_PROVIDER=auto
+      - LLM_TIMEOUT_SECONDS=40
+      - QWEN_PROXY_BASE_URL=http://qwen-proxy:8080/v1
+      - QWEN_PROXY_API_KEY=fake-key
+      - QWEN_PROXY_MODEL=coder-model
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:3b
     volumes:
       - backend_data:/app/data
     ports:
       - "8000:8000"
+    depends_on:
+      - qwen-proxy
+      - ollama
 
   frontend:
     build:
@@ -25,5 +35,36 @@ services:
     ports:
       - "5173:80"
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: exampulse-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  qwen-proxy:
+    build:
+      context: ./qwen-proxy
+      dockerfile: Dockerfile
+    container_name: exampulse-qwen-proxy
+    environment:
+      - ADDRESS=0.0.0.0
+      - PORT=8080
+      - MAX_RETRIES=5
+      - RETRY_DELAY_MS=1000
+      - LOG_REQUESTS=false
+      - QWEN_CODE_AUTH_USE=true
+      - QWEN_CODE_API_KEY=fake-key
+      - DEFAULT_MODEL=coder-model
+      - LOG_LEVEL=error
+    volumes:
+      - ${HOME}/.qwen:/root/.qwen
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
 volumes:
   backend_data:
+  ollama_data:

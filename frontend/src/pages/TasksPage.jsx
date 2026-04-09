@@ -99,7 +99,7 @@ export default function TasksPage() {
         {items.map((task) => (
           <li key={task.id} className="list-row">
             <span>
-              {task.title} — {task.due_date} — <strong>{task.status}</strong>
+              {task.title} — {task.due_date} — <strong>{task.status}</strong> — {task.subject_name || "Unknown subject"}
             </span>
             <div className="row-actions">
               <button className="btn" onClick={() => onToggleStatus(task)}>
