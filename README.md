@@ -2,6 +2,20 @@
 
 Web-based exam preparation tracker for students.
 
+## Demo
+
+### Dashboard (progress, exams, tasks)
+
+![Dashboard](docs/screenshots/dashboard-overview.png)
+
+### Calendar view
+
+![Calendar view](docs/screenshots/calendar-view.png)
+
+### Plans page (LLM plan history)
+
+![Plans page](docs/screenshots/plans-page.png)
+
 ## Project description
 
 ExamPulse helps students plan exam preparation in a simple flow: register, add subjects, add exams, add tasks, and check what to study today.
@@ -21,6 +35,13 @@ ExamPulse helps students plan exam preparation in a simple flow: register, add s
 - Dashboard with upcoming exams and today’s tasks
 - AI revision planner (Qwen via Ollama) that generates and saves tasks
 - Local Docker Compose setup
+
+## Not yet implemented features
+
+- Notifications/reminders
+- Telegram bot integration
+- Background jobs and async workers
+- Multi-user collaboration/study groups
 
 ## Scope boundaries (current)
 
@@ -170,6 +191,15 @@ Core frontend behavior:
 - list rendering for subjects/exams/tasks
 - dashboard cards for upcoming exams and today’s tasks
 
+## Usage
+
+1. Register a new user on `/register`.
+2. Login on `/login`.
+3. Create subjects on `/subjects`.
+4. Add exams on `/exams` and tasks on `/tasks`.
+5. Open `/dashboard` to view calendar, upcoming exams, and progress.
+6. Open `/planner` to generate an AI plan and `/plans` to track plan items.
+
 ## Section 5: Run instructions
 
 ### Backend
@@ -251,6 +281,55 @@ To stop and remove DB volume:
 
 ```bash
 docker compose down -v
+```
+
+## Deployment (Ubuntu 24.04 VM)
+
+Target VM OS: **Ubuntu 24.04 LTS**.
+
+### What should be installed on the VM
+
+- `git`
+- `docker` and `docker compose` plugin
+- (optional) `curl` for health checks
+
+### Step-by-step deployment instructions
+
+1. Clone repository:
+
+```bash
+git clone https://github.com/Ikkdar/se-toolkit-hackathon.git
+cd se-toolkit-hackathon
+```
+
+1. Start all services:
+
+```bash
+docker compose up -d --build
+```
+
+1. (Optional) Authenticate Qwen OAuth on VM host (for qwen-code-api):
+
+```bash
+qwen auth qwen-oauth
+docker compose restart qwen-proxy backend
+```
+
+1. Verify services:
+
+```bash
+docker compose ps
+```
+
+1. Open the app:
+
+- Frontend: `http://<VM_IP>:5173`
+- Backend API docs: `http://<VM_IP>:8000/docs`
+
+1. Stop services when needed:
+
+```bash
+docker compose down
 ```
 
 ## Section 7: Testing checklist
