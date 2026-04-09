@@ -6,6 +6,8 @@ const links = [
   { to: "/subjects", label: "Subjects" },
   { to: "/exams", label: "Exams" },
   { to: "/tasks", label: "Tasks" },
+  { to: "/planner", label: "AI Planner" },
+  { to: "/plans", label: "Plans" },
 ];
 
 export default function Layout() {

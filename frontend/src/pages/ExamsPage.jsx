@@ -84,7 +84,7 @@ export default function ExamsPage() {
         {items.map((exam) => (
           <li key={exam.id} className="list-row">
             <span>
-              {exam.title} — {exam.exam_date}
+              {exam.title} — {exam.exam_date} — <strong>{exam.subject_name || "Unknown subject"}</strong>
             </span>
             <button className="btn danger" onClick={() => onDelete(exam.id)}>
               Delete

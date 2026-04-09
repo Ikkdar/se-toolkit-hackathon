@@ -18,7 +18,24 @@ def _validate_user_subject(db: Session, user_id: int, subject_id: int) -> Subjec
 
 @router.get("", response_model=list[ExamOut])
 def list_exams(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Exam).filter(Exam.user_id == current_user.id).order_by(Exam.exam_date.asc()).all()
+    exams = (
+        db.query(Exam)
+        .join(Subject, Subject.id == Exam.subject_id)
+        .filter(Exam.user_id == current_user.id)
+        .order_by(Exam.exam_date.asc())
+        .all()
+    )
+    return [
+        {
+            "id": exam.id,
+            "user_id": exam.user_id,
+            "subject_id": exam.subject_id,
+            "title": exam.title,
+            "exam_date": exam.exam_date,
+            "subject_name": exam.subject.name,
+        }
+        for exam in exams
+    ]
 
 
 @router.post("", response_model=ExamOut, status_code=status.HTTP_201_CREATED)

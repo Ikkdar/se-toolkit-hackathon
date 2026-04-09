@@ -3,9 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.db import Base, engine
+from app.routes.ai import router as ai_router
 from app.routes.auth import router as auth_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.exams import router as exams_router
+from app.routes.stats import router as stats_router
 from app.routes.subjects import router as subjects_router
 from app.routes.tasks import router as tasks_router
 
@@ -35,3 +37,5 @@ app.include_router(subjects_router)
 app.include_router(exams_router)
 app.include_router(tasks_router)
 app.include_router(dashboard_router)
+app.include_router(stats_router)
+app.include_router(ai_router)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { createSubject, deleteSubject, getSubjects } from "../api/subjectsApi";
 import { useAuth } from "../context/AuthContext";
 
@@ -54,7 +55,9 @@ export default function SubjectsPage() {
       <ul>
         {items.map((subject) => (
           <li key={subject.id} className="list-row">
-            <span>{subject.name}</span>
+            <Link to={`/subjects/${subject.id}`} className="subject-link">
+              {subject.name}
+            </Link>
             <button className="btn danger" onClick={() => onDelete(subject.id)}>
               Delete
             </button>
