@@ -11,3 +11,11 @@ export function createSubject(token, payload) {
 export function deleteSubject(token, subjectId) {
   return request(`/subjects/${subjectId}`, { method: "DELETE", token });
 }
+
+export function getSubjectDetail(token, subjectId) {
+  return request(`/subjects/${subjectId}`, { token });
+}
+
+export function getSubjectStats(token, subjectId) {
+  return request(`/subjects/${subjectId}/stats`, { token });
+}

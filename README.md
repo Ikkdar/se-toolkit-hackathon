@@ -12,21 +12,20 @@ ExamPulse helps students plan exam preparation in a simple flow: register, add s
 - Problem: exam preparation is often chaotic and unstructured
 - V1 solution: one clean planner with auth + subjects + exams + tasks + dashboard
 
-## Implemented features (V1)
+## Implemented features (V2)
 
 - User registration and login (JWT auth)
 - Subject CRUD
 - Exam CRUD
 - Task CRUD (`todo` / `done`)
-- Dashboard:
-    - upcoming exams
-    - today’s tasks
+- Dashboard with upcoming exams and today’s tasks
+- AI revision planner (Qwen via Ollama) that generates and saves tasks
 - Local Docker Compose setup
 
-## Scope boundaries (strict V1)
+## Scope boundaries (current)
 
-- Included: backend + frontend + SQLite + Docker local run
-- Not included: AI, Telegram bot, advanced analytics, notifications, background jobs, V2 features
+- Included: backend + frontend + SQLite + Docker local run + Qwen-based study plan generation
+- Not included: Telegram bot, notifications, background jobs
 
 ## Section 1: Architecture
 
@@ -213,6 +212,34 @@ After startup:
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
+
+### Qwen model setup (one-time, Ollama option)
+
+AI planner endpoint uses Ollama + Qwen (`qwen2.5:3b`). After containers are up, pull the model:
+
+```bash
+docker exec -it exampulse-ollama ollama pull qwen2.5:3b
+```
+
+Then use `POST /ai/revision-plan` or open the frontend `AI Planner` page.
+
+### Qwen Code API proxy integration (recommended for VM)
+
+This project now supports `inno-se-toolkit/qwen-code-api` (OpenAI-compatible).
+
+1. Run the proxy from that repository and make sure it responds on `http://localhost:8080/v1`.
+1. Configure backend env (`backend/.env.example` values or your real `.env`):
+
+```bash
+LLM_PROVIDER=qwen_proxy
+QWEN_PROXY_BASE_URL=http://localhost:8080/v1
+QWEN_PROXY_API_KEY=fake-key
+QWEN_PROXY_MODEL=coder-model
+```
+
+1. Restart backend service.
+
+`LLM_PROVIDER=auto` is also supported (tries `qwen-code-api` first, then Ollama, then local fallback planner).
 
 To stop containers:
 

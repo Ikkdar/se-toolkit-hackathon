@@ -18,7 +18,25 @@ def _validate_user_subject(db: Session, user_id: int, subject_id: int) -> Subjec
 
 @router.get("", response_model=list[TaskOut])
 def list_tasks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Task).filter(Task.user_id == current_user.id).order_by(Task.due_date.asc()).all()
+    tasks = (
+        db.query(Task)
+        .join(Subject, Subject.id == Task.subject_id)
+        .filter(Task.user_id == current_user.id)
+        .order_by(Task.due_date.asc())
+        .all()
+    )
+    return [
+        {
+            "id": task.id,
+            "user_id": task.user_id,
+            "subject_id": task.subject_id,
+            "title": task.title,
+            "due_date": task.due_date,
+            "status": task.status,
+            "subject_name": task.subject.name,
+        }
+        for task in tasks
+    ]
 
 
 @router.post("", response_model=TaskOut, status_code=status.HTTP_201_CREATED)

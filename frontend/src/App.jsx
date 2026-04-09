@@ -4,7 +4,10 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardPage from "./pages/DashboardPage";
 import ExamsPage from "./pages/ExamsPage";
 import LoginPage from "./pages/LoginPage";
+import PlannerPage from "./pages/PlannerPage";
+import PlansPage from "./pages/PlansPage";
 import RegisterPage from "./pages/RegisterPage";
+import SubjectDetailPage from "./pages/SubjectDetailPage";
 import SubjectsPage from "./pages/SubjectsPage";
 import TasksPage from "./pages/TasksPage";
 
@@ -25,8 +28,11 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="subjects" element={<SubjectsPage />} />
+        <Route path="subjects/:subjectId" element={<SubjectDetailPage />} />
         <Route path="exams" element={<ExamsPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="planner" element={<PlannerPage />} />
+        <Route path="plans" element={<PlansPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
